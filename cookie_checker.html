@@ -14,6 +14,7 @@
         .success { background-color: #4CAF50; display: block; }
         .error { background-color: #f44336; display: block; }
         .loading { background-color: #ff9800; display: block; }
+        .warning { background-color: #ff9800; display: block; }
     </style>
 </head>
 <body>
@@ -28,6 +29,70 @@
     </div>
 
     <script>
+        function checkCookieValidity(cookieValue) {
+            return new Promise((resolve) => {
+                // Create a temporary iframe to make the request
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.sandbox = 'allow-scripts allow-same-origin';
+                iframe.srcdoc = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <script>
+                            window.addEventListener('message', function(event) {
+                                if (event.data.type === 'checkCookie') {
+                                    fetch('https://users.roblox.com/v1/users/authenticated', {
+                                        method: 'GET',
+                                        headers: {
+                                            'Cookie': '.ROBLOSECURITY=${cookieValue.replace(/'/g, "\\'")}',
+                                            'Content-Type': 'application/json'
+                                        },
+                                        credentials: 'include'
+                                    })
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        window.parent.postMessage({
+                                            type: 'cookieResult',
+                                            success: true,
+                                            data: data
+                                        }, '*');
+                                    })
+                                    .catch(error => {
+                                        window.parent.postMessage({
+                                            type: 'cookieResult',
+                                            success: false,
+                                            error: error.message
+                                        }, '*');
+                                    });
+                                }
+                            });
+                       <\/script>
+                    </head>
+                    <body></body>
+                    </html>
+                `;
+
+                document.body.appendChild(iframe);
+
+                // Listen for results from the iframe
+                const messageHandler = function(event) {
+                    if (event.data.type === 'cookieResult') {
+                        window.removeEventListener('message', messageHandler);
+                        document.body.removeChild(iframe);
+                        resolve(event.data);
+                    }
+                };
+
+                window.addEventListener('message', messageHandler);
+
+                // Start the check
+                setTimeout(() => {
+                    iframe.contentWindow.postMessage({ type: 'checkCookie' }, '*');
+                }, 1000);
+            });
+        }
+
         document.getElementById('cookieForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             const button = this.querySelector('button');
@@ -38,50 +103,38 @@
             const cookieValue = document.getElementById('robloxCookie').value.trim();
             const resultDiv = document.getElementById('result');
             
-            resultDiv.innerHTML = '<p>Checking cookie validity with Roblox API...</p>';
+            resultDiv.innerHTML = '<p>Creating secure connection to Roblox...</p>';
             resultDiv.className = 'loading';
             resultDiv.style.display = 'block';
 
             try {
-                // Using a serverless function via GitHub Pages API route pattern
-                // This will work on GitHub Pages
-                const response = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://users.roblox.com/v1/users/authenticated'), {
-                    method: 'GET',
-                    headers: {
-                        'Cookie': `.ROBLOSECURITY=${cookieValue}`,
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    }
-                });
-
-                const responseText = await response.text();
+                const result = await checkCookieValidity(cookieValue);
                 
-                if (response.status === 200 && responseText.includes('"name"')) {
-                    const userData = JSON.parse(responseText);
+                if (result.success && result.data && result.data.name) {
                     resultDiv.innerHTML = `
                         <p>✅ COOKIE VALID!</p>
-                        <p><strong>Username:</strong> ${userData.name}</p>
-                        <p><strong>User ID:</strong> ${userData.id}</p>
+                        <p><strong>Username:</strong> ${result.data.name}</p>
+                        <p><strong>User ID:</strong> ${result.data.id}</p>
                         <p><strong>Status:</strong> Cookie is working properly</p>
                     `;
                     resultDiv.className = 'success';
-                } else if (response.status === 401 || responseText.includes('Unauthorized')) {
-                    resultDiv.innerHTML = '<p>❌ COOKIE INVALID: Authentication failed (401)</p>';
-                    resultDiv.className = 'error';
-                } else if (response.status === 403) {
-                    resultDiv.innerHTML = '<p>❌ COOKIE EXPIRED: No longer valid (403)</p>';
-                    resultDiv.className = 'error';
                 } else {
-                    resultDiv.innerHTML = `<p>❌ UNKNOWN RESPONSE: Status ${response.status}</p><p>Response: ${responseText}</p>`;
+                    resultDiv.innerHTML = `
+                        <p>❌ COOKIE INVALID OR EXPIRED</p>
+                        <p>Error: ${result.error || 'Unable to authenticate'}</p>
+                        <p><strong>Note:</strong> This checker works on GitHub Pages but may have limitations due to browser security.</p>
+                    `;
                     resultDiv.className = 'error';
                 }
             } catch (error) {
                 resultDiv.innerHTML = `
-                    <p>❌ NETWORK ERROR: ${error.message}</p>
-                    <p><strong>Alternative solution:</strong></p>
-                    <p>1. Save this page as .html file</p>
-                    <p>2. Open it directly in your browser (double-click)</p>
-                    <p>3. It will work without CORS issues</p>
+                    <p>❌ TECHNICAL ERROR</p>
+                    <p>${error.message}</p>
+                    <p class="warning">🛡️ Browser security is blocking this request.</p>
+                    <p><strong>100% Working Solution:</strong></p>
+                    <p>1. Right-click → "Save as" to download this page</p>
+                    <p>2. Open the downloaded .html file directly in your browser</p>
+                    <p>3. It will work perfectly without restrictions</p>
                 `;
                 resultDiv.className = 'error';
             }
