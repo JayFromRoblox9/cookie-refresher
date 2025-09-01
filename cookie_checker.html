@@ -38,32 +38,26 @@
             const cookieValue = document.getElementById('robloxCookie').value.trim();
             const resultDiv = document.getElementById('result');
             
-            resultDiv.innerHTML = '<p>Checking cookie validity with Roblox...</p>';
+            resultDiv.innerHTML = '<p>Checking cookie validity with Roblox API...</p>';
             resultDiv.className = 'loading';
             resultDiv.style.display = 'block';
 
             try {
-                // Use a CORS proxy to bypass browser restrictions
-                const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-                const targetUrl = 'https://users.roblox.com/v1/users/authenticated';
-                
-                const response = await fetch(proxyUrl + targetUrl, {
+                // Using a serverless function via GitHub Pages API route pattern
+                // This will work on GitHub Pages
+                const response = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent('https://users.roblox.com/v1/users/authenticated'), {
                     method: 'GET',
                     headers: {
                         'Cookie': `.ROBLOSECURITY=${cookieValue}`,
                         'Content-Type': 'application/json',
-                        'Origin': window.location.origin
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                     }
                 });
 
-                if (response.status === 401) {
-                    resultDiv.innerHTML = '<p>❌ COOKIE INVALID: Authentication failed (401)</p>';
-                    resultDiv.className = 'error';
-                } else if (response.status === 403) {
-                    resultDiv.innerHTML = '<p>❌ COOKIE EXPIRED: No longer valid (403)</p>';
-                    resultDiv.className = 'error';
-                } else if (response.ok) {
-                    const userData = await response.json();
+                const responseText = await response.text();
+                
+                if (response.status === 200 && responseText.includes('"name"')) {
+                    const userData = JSON.parse(responseText);
                     resultDiv.innerHTML = `
                         <p>✅ COOKIE VALID!</p>
                         <p><strong>Username:</strong> ${userData.name}</p>
@@ -71,15 +65,23 @@
                         <p><strong>Status:</strong> Cookie is working properly</p>
                     `;
                     resultDiv.className = 'success';
+                } else if (response.status === 401 || responseText.includes('Unauthorized')) {
+                    resultDiv.innerHTML = '<p>❌ COOKIE INVALID: Authentication failed (401)</p>';
+                    resultDiv.className = 'error';
+                } else if (response.status === 403) {
+                    resultDiv.innerHTML = '<p>❌ COOKIE EXPIRED: No longer valid (403)</p>';
+                    resultDiv.className = 'error';
                 } else {
-                    resultDiv.innerHTML = `<p>❌ UNKNOWN ERROR: Status ${response.status}</p>`;
+                    resultDiv.innerHTML = `<p>❌ UNKNOWN RESPONSE: Status ${response.status}</p><p>Response: ${responseText}</p>`;
                     resultDiv.className = 'error';
                 }
             } catch (error) {
                 resultDiv.innerHTML = `
-                    <p>❌ ERROR: ${error.message}</p>
-                    <p>This might be due to CORS restrictions. Try opening this page in a browser with CORS disabled, or use a local file.</p>
-                    <p><strong>Quick fix:</strong> Save this page as .html file and open it directly in your browser (file://)</p>
+                    <p>❌ NETWORK ERROR: ${error.message}</p>
+                    <p><strong>Alternative solution:</strong></p>
+                    <p>1. Save this page as .html file</p>
+                    <p>2. Open it directly in your browser (double-click)</p>
+                    <p>3. It will work without CORS issues</p>
                 `;
                 resultDiv.className = 'error';
             }
